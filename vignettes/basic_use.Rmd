@@ -1,0 +1,317 @@
+---
+title: "Basic Use of `gwxtab`"
+author: "Chris Brunsdon"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Basic Use}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# What is `gwxtab`?
+
+The `gwxtab` package provides a toolkit for working with _geographcally weighted cross-tabulations_ - basically a way of looking at local relationships between pairs of categorical variables.   Both variables are presumed to be either strings of factors in R. The packages makes a lot of use of the `sp` package,  and also of `rgdal` - map projections can be important here.  At the moment,  the fundamental object class introduced in this package is the `SpatialCrossTabs` class - a collection of cross-tabulation matrices,  each tagged with a point location.
+
+Another fundamental idea is the _dummy crosstab_.  For a single pair of categorical values of class `factor` $(c_1,c_2)$,  consider a cross-tabulation matrix $M$ whose rows correspond to possible values of the first variable,   and whose columns correspond to the values of the second.  For just the single value pair $(c_1,c_2)$ the elements of $M$ are zero everywhere except the element in the $c_i$'th row and $c_2$'th column which takes the value 1.  such a cross-tabulation is termed a _dummy crosstab_ - in the same way as dummy variables are used for single categorical variables in regression modelling.
+
+If there are $n$ pairs of categorical observations $(c_{11},c_{12}) \cdots (c_{n1},c_{n2})$  with corresponding dummy crosstabs $M_1 \cdots M_n$,  then the crosstabulation for the whole data set is
+
+$$
+ M_{\textrm{all}} = \sum_{i=1}^{n} M_i
+$$
+
+Furthermore,  if the cells in the contingency table are not required to be integer-valued (thus measuring an *intensity* rather than a *count*) then a weighted crosstabulation for the whole dataset, for weights $w_1,\cdots,w_n$   is:
+
+$$
+ M_w = \sum_{i=1}^{n} w_iM_i
+$$
+
+Finally,  if the weights are associated with a location $\bf{u}$ and each dummy crosstab $M_i$ is associated with a location $\mathbf{v}_i$, $f(d_i)$ is a kernel function of the distance $d_i$ between $\mathbf{u}$ and $\mathbf{v}_i$, and $w_i(\mathbf{u}) = f(d_i)$ then
+
+$$
+ M(\mathbf{u}) = \sum_{i=1}^{n} w_i(\mathbf{u})M_i
+$$
+
+is a *geographically weighted crosstabulation* measuring the local intensity of two-way interactions between the two designated categorical variables.  
+
+Although spatially referenced cross tabulations are not that useful *per se* they can be the basis for a number of localised methods when working with spatially referenced categorical data.   In particular they are helpful tools if considering the local accuracy of land use classification techniques.  Here the crosstabulation is a *confusion matrix* - a crosstabulation of actual vs predicted land use (or land cover) at a number of ground truthing sites.   A typical kernel function is the *bisquare* kernel.  For a given bandwidth $h$,  this is defined by
+$$
+f(d) = \left\{ \begin{array}{cl}
+  \left(1 - \left( \frac{d}{h} \right)^2 \right)^2 & \mbox{ if $d < h$}; \\
+   & \\
+  0 & \mbox{ otherwise.} \end{array} \right.
+$$
+Here $h$ may be defined as a fixed value,  or in an adaptive way,  for example to be the distance from the $k$th closest point in the `SpatialCrossTabs` object to $\mathbf{u}$.  Generally larger values of $h$ result in a greater degree of spatial smoothing - having a larger window around $\mathbf{u}$ in which crosstabulations have non-zero weighting.
+
+A particular statistic,  such as the *portmanteau accuracy* 
+
+$$
+P(M) = \frac{\sum_i{M_{ii}}}{\sum_{i,j}{M_{ij}}}
+$$
+
+may then be applied to the geographically weighted crosstabulation to obtain a geographically weighted portmanteau accuracy measure.
+In the next section the approach will be demonstrated.
+
+
+# A Basic Example
+
+## The `SpatialCrossTabs` object
+
+Firstly a ground truthing data set is introduced - the one Lex and Naru use.  It is provided with the `gwxtab` package,  which must be loaded first.  For later on in this demonstration,  two other packages `sp` and `RColorBrewer` are also loaded.
+
+```{r, fig.show='hold'}
+## Demonstrator for SpatialCrossTabs
+
+# Packages and data
+library(gwxtab)
+library(sp)
+library(RColorBrewer)
+data(classification)
+```
+
+Once this is done,  it is possible to create a dummy crosstabs object.   The `data(classification)` step loads a `SpatialPointsDataFrame` called `loc_confuse`
+```{r}
+loc_confuse
+```
+This has a set of 98 ground-truthed points,  with predicted (via a support vector machine) and actual land cover classes. To create a `SpatialCrossTabs` object with a dummy crosstab at each observation point:
+
+
+```{r, fig.show='hold'}
+# Set up a crosstab function
+dummy_xtab <- new_spxt(loc_confuse,'actual','svmpred')
+dummy_xtab
+```
+
+The `SpatialCrossTabs` object has a location associated with each cross-tabulation,  and has a map projection specified (via a `CRS` object as defined in `sp`). The `coordinates` method gives the locations:
+```{r}
+head(coordinates(dummy_xtab))
+```
+and square brackets allow access to the individual crosstabs:
+```{r}
+dummy_xtab[6]
+```
+
+## Geographically Weighted Crosstabs
+
+Recall the geographically weighted crosstabs depend on a `SpatialCrossTabs` object - or at least a set of dummy crosstabs to provide a weighted sum - and that there is a weighted crosstabulation corresponding to any geographical point location $\mathbf{u}$. 
+In its simplest form,  this is how they are implemented in R.  Here,  functions that take a location as an argument and return the cross tabulation are called **probe functions**. The function `gwxtab_probe` is a tool for making probe functions. It takes a dummy crosstabulation `SpatialCrossTabs` object and a bandwidth to create a new **function** that maps a geographical location $(u_1,u_2)$ on to a geographically weighted crosstabulation.  At this stage you can have any kernel you like as long as it is bisquare.
+
+
+```{r}
+# Create the GW-crosstabulation function from dummy_xtab and a 20km bandwidth
+# it is called 'gwxt'
+gwxt <- gwxtab_probe(dummy_xtab,fixed(20))
+# Try it out
+gwxt(661800,-671700)
+```
+
+The `fixed(20)` is used to specify a bandwidth of 20km - the `fixed` part implies we are working with a fixed bandwidth ($h$ is the same everywhere).  The units default to km (regardless of the units of the projection) - but it is possible to express the bandwidth in alternative length units - for example
+
+```{r}
+# Create another mapping function based on a bandwidth of 20 nautical miles
+gwxt_nm <- gwxtab_probe(dummy_xtab,fixed(20,'nm'))
+# Try it out - note it isn't the same as last time as 20nm isn't 20km !
+gwxt_nm(661800,-671700)
+```
+
+To work with adaptive bandwidths, use `adapt(k)` instead of `fixed(d)` - where `k` is the number of nearest neighbours:
+
+```{r}
+# Create another mapping function based on an adaptive bandwidth of 35 nearest neighbours
+gwxt_ad <- gwxtab_probe(dummy_xtab,adapt(35))
+# Try it out - different again...
+gwxt_ad(661800,-671700)
+```
+
+However,  all of these options,  although certainly geographical are not easily 'mappable' - a two-dimensional array as a function of points in 2D space is difficult to visualise.  It is simpler to summarise the crosstabulation as a single statistic - which gives a straighforward scalar function of $(u_1,u_2)$ which may be contoured,  shaded or visualised in perspective.  If the crosstabulation is a confusion matrix,  as in this example, then an appropriate single statistic is the portmanteau accuracy mentioned earlier.  This may be defined as a function of an $m$ by $m$ matrix thus:
+
+```{r}
+pm <- function(x) sum(diag(x))/sum(x)
+```
+and then applied to one of the 'probe' functions.
+
+```{r}
+pm(gwxt(661800,-671700))
+```
+
+Effectively this is a geographically weighted portmanteau accuracy statistic.
+However,  to make things simpler, it is possible to create this as a single function:
+
+```{r}
+# Create the GW-portmanteau function from dummy_xtab and a 20km bandwidth and 'pm'
+# it is called 'gwpm'
+gwpm <- gwxtab_probe(dummy_xtab,fixed(20),melt=pm)
+# Try it out
+gwpm(661800,-671700)
+```
+
+The idea of applying a function to a `SpatialCrossTabs` table to obtain a single value is called 'melting',  hence `melt=pm` in the function definition.  As before,  the function produced is just the same as any other function in R.
+
+Also,  various 'flavours' of the probe function can be made via the 'mode' argument in `gwxtab_probe` - the default is *scalar* mode, giving a probe function  requiring two scalars `x` and `y` to specify location.  Another option is `vector` - creating a probe function that operates on a single variable that contains two elements.
+
+```{r}
+gwpm2 <- gwxtab_probe(dummy_xtab,fixed(20),mode='vector',melt=pm)
+U <- c(661800,-671700)
+gwpm2(U)
+```
+
+Sometimes this can be useful (for example using the `optim` function in R to find a location minimising or maximising the local statistic).  
+
+# Visualisation of Melted Functions
+
+The probe function approach is useful,  but for visualisation purposes,  it is often helpful to obtain values of the local statistic for a sampling grid of points (for example a hexagonal or rectangular grid).  This can be done in two ways,  both using the 
+`gwxtab_sample` function. This takes either a `SpatialPoints` object (a vector-based spatial object) or a `Raster` object containing the probing points and evaluates the melted GW-crosstab at each poiint in the object.   The result is a new `SpatialPointsDataFrame` or `Raster` object containing the probed values at the saample points.  The `SpatialPoints` approach is more flexible,  but typically more memory-intensive and slower.  To see the flexibility,  it is possible (using the `spsample` function from `sp` to generate hexagonal sampling grids)
+
+```{r}
+hg <- spsample(loc_confuse,5000,'hexagonal',offset=c(0.5,0.5))
+```
+Here, around 5000 points are created on a hexagonal grid covering the bounding box of `loc_confuse` - these may be seen below:
+
+```{r,fig.show='hold'}
+par(mar=c(0,0,0,0)+0.1)
+plot(loc_confuse,pch=16,col='navy',cex=1.5)
+plot(hg,pch=16,col='indianred',cex=0.4,add=TRUE)
+```
+
+We can then add a GW-portmanteau statistic as a data attribute to this `SpatialPoints` object.  This will create a `SpatialPointsDataFrame` object. Note that the 'data frame' part of thisworks better when the melting function returns a data frame (even if it is simply a one row and one colunm data frame) - this ensures that the value has a column name.  All of the melted values will be bound together to give a one-column data frame,  with an entry at each spatial point. Thus,  firstly re-define the portmanteau statistic to take the form of a data frame:
+
+```{r,fig.show='hold'}
+# Re-define a portmanteau accuracy function
+pm <- function(x) data.frame(port=sum(diag(x))/sum(x))
+```
+
+Now create the `SpatialPointsDataFrame` :
+```{r}
+hg_port <- gwxtab_sample(hg,dummy_xtab,adapt(15),melt=pm)
+```
+Now,  one approach to visualising this is to plot the hexagonal grid of points,  but allow the size of each symbol to vary in proportion to the value of the local portmanteau accuracy:
+
+```{r,fig.show='hold'}
+par(mar=c(0,0,0,0)+0.1)
+plot(loc_confuse,pch=16,col='navy',cex=1.5)
+plot(hg_port,pch=16,col='indianred',cex=0.6*hg_port$port,add=TRUE)
+```
+
+
+Note that depending on the size of your graphics window,  the realtive size of the symbols vary.  For inclusion in this vignette (in R vignette format) graphics are quite small,  and so the `cex` value is quite low to ovoid overlapping symbols.  You may wish to experiment with a larger multiplier than `0.6` in the last plotting statement.  This holds for the following examples also.
+
+A variant on this is to use the `stratified` option in `spsample` - this generates one sample point per grid square,  but at a random location in the square - giving a randomised 'pointilism' style.  This is useful for communicating uncertain information.  The approach is as above,  but with a stratified sampling grid:
+
+```{r, fig.show='hold'}
+# create the stratified sampling grid
+sg <- spsample(loc_confuse,5000,'stratified')
+# Carry out the sampling
+sg_port <- gwxtab_sample(sg,dummy_xtab,adapt(15),melt=pm)
+# Plot the result
+par(mar=c(0,0,0,0)+0.1)
+plot(loc_confuse,pch=16,col='navy',cex=1.5)
+plot(sg_port,pch=16,col='indianred',cex=0.5*sg_port$port,add=TRUE)
+```
+
+
+## Choice of visualisation method
+
+There are a number of other approaches to visualising accuracy - one particular reason I like the ones demonstrated here is that they work on a continuous scale - the portmanteau accuracy is not split into a number of 'bands' with an associated colour.  This avoids giving an impression of sudden change when the accuracy crosses a number of what are essentially arbitary thresholds.  Another way in which this avoids becoming a misleading visualisation is that all symbols are in the same colour - in MATLAB's 'jet' colour scheme for example,  numbers are mapped onto a range of colours of changing hue.  The hue changes at arbitary locations,  again focussing attention on spurious values  see http://www.climate-lab-book.ac.uk/2016/why-rainbow-colour-scales-can-be-misleading/ for an example. In fairness,  this is also the case in the `RColorBrewer` 'spectral' scheme. If a colour based shading scheme is required, the 'viridis' colour scheme is a better option than 'jet' or 'spectral' - http://www.climate-lab-book.ac.uk/2015/new-viridis-colour-scale/ . It is available in R via  https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html . If the `viridis` library is installed,  the following creates a colour-based visualisation (in near-continuous scale) of the same data:
+
+```{r, fig.show='hold', warning=FALSE}
+library(viridis) # We need the package to do this
+
+# Now make a function to map 0-1 onto a 256-point viridis pallete
+map2vir <- function(x) {
+  lookup <- viridis(256)
+  index <- (x * 255) %/% 1 + 1
+  return(lookup[index])
+}
+
+# Now draw the result
+par(mar=c(0,0,0,0)+0.1)
+plot(loc_confuse,pch=16,col='navy',cex=1.5)
+plot(hg_port,pch=16,col=map2vir(hg_port$port),cex=0.5,add=TRUE)
+
+# ... and also using the stratified grid
+plot(loc_confuse,pch=16,col='navy',cex=1.5)
+plot(sg_port,pch=16,col=map2vir(sg_port$port),cex=0.5,add=TRUE)
+```
+
+Finally,  follow the #endrainbow hashtag on twitter if you are interested in this issue.
+
+## Categorical melt functions
+Often the 'melting' function has a categorical or `factor` value - for example most likely land use class. If this is the case it is possible to define melting functions that return a `factor` instead of a `numeric` value.  It is often the case that factors are a better option than character values here - mainly because factors have an attribute stating which levels are *possible* - not just the value that occurs in a particular set of observations. This is useful - providing two sample based `SpatialPointsDataFrames` have the same levels defined in a factor they should create identical categorical shading schemes.  
+
+Below,  a majority vote rule land use assignment is derived from the confusion matrix - summing the rows gives the geographically weighted count of predicted types - then returning the name of the largest row sum gives a 'majority vote' prediction (ie the most common predition in the geographically weighted kernel).  Again this is returned as a data frame - but note this time the value is a factor with only one observation,  but the levels provide information about all of the values it *could* have taken.  The code below creates a melting function to do this - called `maj` and then evaluates this on both the hexagonal and stratified sampling grids.
+
+```{r}
+# Define a majority vote function
+maj <- function(x) {
+  votes <- rowSums(x)
+  idx <- which.max(votes)
+  data.frame(choice = factor(names(votes)[idx],levels=names(votes)))
+}
+# Make a sample spdf
+hg_maj <- gwxtab_sample(hg,dummy_xtab,adapt(15),maj)
+sg_maj <- gwxtab_sample(sg,dummy_xtab,adapt(15),maj)
+```
+
+Next,  both of these can be drawn.   Here a categorical palette is used for the colours - the land cover classes are not a continuous (or even ordinal) scale - the `dark2` palette in `RColorBrewer` returns a list of colours designed to be distinct in hue without any implicit ordering,  and are therefore appropriate for this task. The levels for this factor are represented as integers,  and then looked up in the `levels` attribute - although under some circumstances they can be treated as integers.  In that capacity they could used to select a colour from the 'Set2' palette in `RColorBrewer`. However,  this practice of relying on an internal technique in R may be frowned upon by some - in case future versions change the internal representation of `factor` objects.   Thus,  an approach defining a function `find_col` using only standard R is used below to map categories in the factor on to colours:
+
+```{r, fig.show='hold'}
+# ... now draw it
+
+col_list <- brewer.pal(8,'Set2') # Palette used
+find_col <- function(fac,pal) pal[match(fac,levels(fac))] # Match factor to colour
+
+
+par(mar=c(0,0,0,0)+0.4)
+plot(hg_maj,col=find_col(hg_maj$choice,col_list),pch=16,cex=0.4)
+plot(sg_maj,col=find_col(sg_maj$choice,col_list),pch=16,cex=0.4)
+```
+
+
+
+```{r}
+# Define a representative random vote function
+rmaj <- function(x) {
+  votes <- rowSums(x)
+  idx <- factor(sample(names(votes),1,prob=votes),levels=names(votes))
+  data.frame(choice = idx)
+}
+# Make a sample spdf
+hg_rmaj <- gwxtab_sample(hg,dummy_xtab,adapt(15),rmaj)
+sg_rmaj <- gwxtab_sample(sg,dummy_xtab,adapt(15),rmaj)
+```
+
+```{r, fig.show='hold'}
+# ... now draw it
+
+
+
+par(mar=c(0,0,0,0)+0.4)
+plot(hg_rmaj,col=find_col(hg_rmaj$choice,col_list),pch=16,cex=0.4)
+plot(sg_rmaj,col=find_col(sg_rmaj$choice,col_list),pch=16,cex=0.4)
+```
+
+```{r}
+# Define a majority vote / confidence function
+maj_ent <- function(x) {
+  votes <- rowSums(x)
+  idx <- which.max(votes)
+  pr_votes <- votes/sum(votes)
+  ent <- pr_votes[idx]
+  data.frame(choice = factor(names(votes)[idx],levels=names(votes)), ent=ent)
+}
+
+# Make a sample spdf
+hg_maj_ent <- gwxtab_sample(hg,dummy_xtab,adapt(15),maj_ent)
+sg_maj_ent <- gwxtab_sample(sg,dummy_xtab,adapt(15),maj_ent)
+```
+
+```{r, fig.show='hold'}
+# ... now draw it
+
+
+par(mar=c(0,0,0,0)+0.4)
+plot(hg_maj_ent,col=find_col(hg_maj_ent$choice,col_list),pch=16,cex=0.7*hg_maj_ent$ent)
+plot(sg_maj_ent,col=find_col(sg_maj_ent$choice,col_list),pch=16,cex=0.7*sg_maj_ent$ent)
+```
+

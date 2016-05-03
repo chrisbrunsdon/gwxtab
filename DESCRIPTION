@@ -1,0 +1,21 @@
+Package: gwxtab
+Type: Package
+Title: Spatially Referenced Cross-Tabulation Manipulation
+Version: 0.1.0
+Author: Chris Brunsdon
+Maintainer: <christopher.brunsdon@nuim.ie>
+Description: Tools for handling geographically weighted contingency tables
+License: What license is it under?
+LazyData: TRUE
+Imports:
+    Rcpp (>= 0.12.4)
+LinkingTo: Rcpp
+RoxygenNote: 5.0.1
+Suggests:
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Collate:
+    'RcppExports.R'
+    'bandwidthclass.R'
+    'SpatialCrossTabs.R'
