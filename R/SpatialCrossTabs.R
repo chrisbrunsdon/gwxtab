@@ -776,7 +776,7 @@ setMethod(f='gwxtab_sample',
 #' @rdname gwxtab_sample
 #' @export
 setMethod(f='gwxtab_sample',
-          signature = c('Raster','SpatialCrossTabs','bandwidth','function'),
+          signature = c('RasterLayer','SpatialCrossTabs','bandwidth','function'),
           definition = function(spdf,spxt,bw,melt) {
             X <- coordinates(spdf)
             vals <- do.call(c,gwxtab_probe(spxt,bw,'matrix',melt)(X))

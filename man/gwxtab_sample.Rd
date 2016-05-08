@@ -3,7 +3,7 @@
 \docType{methods}
 \name{gwxtab_sample}
 \alias{gwxtab_sample}
-\alias{gwxtab_sample,Raster,SpatialCrossTabs,bandwidth,function-method}
+\alias{gwxtab_sample,RasterLayer,SpatialCrossTabs,bandwidth,function-method}
 \alias{gwxtab_sample,Spatial,SpatialCrossTabs,bandwidth,function-method}
 \alias{gwxtab_sample,Spatial,SpatialCrossTabs,numeric,function-method}
 \title{Geographically Weighted contingency table sampling functions}
@@ -16,7 +16,8 @@ gwxtab_sample(spdf, spxt, bw, melt)
 \S4method{gwxtab_sample}{Spatial,SpatialCrossTabs,bandwidth,`function`}(spdf,
   spxt, bw, melt)
 
-\S4method{gwxtab_sample}{Raster,SpatialCrossTabs,bandwidth,`function`}(spdf,
+
+  \S4method{gwxtab_sample}{RasterLayer,SpatialCrossTabs,bandwidth,`function`}(spdf,
   spxt, bw, melt)
 }
 \arguments{
