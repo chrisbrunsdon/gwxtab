@@ -1,13 +1,18 @@
 ---
 title: "Basic Use of `gwxtab`"
-author: "Chris Brunsdon"
-date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{Basic Use}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+author: 
+- "Chris Brunsdon"
+- "Martin Charlton"
+- "Paul Harris"
+date: "May 2016"
+output:
+  html_document:
+    theme: readable
 ---
+
+This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License. To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/3.0/.
+
+![](http://i.creativecommons.org/l/by-sa/3.0/88x31.png)
 
 # What is `gwxtab`?
 
@@ -339,7 +344,7 @@ plot(sg_maj_ent,col=find_col(sg_maj_ent$choice,col_list),pch=16,cex=0.7*sg_maj_e
 
 # Using `Raster` Objects
 
-It is also possible to sample melted local cross tabulations on to `Raster` objects as used in the `raster` library.  At the moment,  multi-valued melting functions aren't supported,  and the value must be a single numeric value (although factors work to some extent).   Here,  a 20km resolution raster grid is used to sample the local portmanteau accuracy.  This is then shaded using the *viridis* shading scheme. 
+It is also possible to sample melted local cross tabulations on to `Raster` objects as used in the `raster` library.  At the moment,  multi-valued melting functions aren't supported,  and the value must be a single numeric value (although factors work to some extent).   Here,  a 250m resolution raster grid is used to sample the local portmanteau accuracy.  This is then shaded using the *viridis* shading scheme. 
 
 ```{r, fig.show='hold'}
 library(raster)
@@ -352,3 +357,4 @@ pm_ras <- mask(pm_ras,roiuk)
 image(pm_ras,asp=1,axes=F,col=rev(viridis_pal()(255)))
 plot(roiuk,add=TRUE)
 ```
+

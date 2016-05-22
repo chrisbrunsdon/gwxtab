@@ -1,0 +1,9 @@
+inst/doc
+.Rproj.user
+parrotsq.png
+parrotfizz.png
+lc.kmz
+src/*.o
+src/*.so
+src/*.dll
+
